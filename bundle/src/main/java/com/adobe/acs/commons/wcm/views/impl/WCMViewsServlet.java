@@ -20,7 +20,7 @@
 
 package com.adobe.acs.commons.wcm.views.impl;
 
-import com.adobe.acs.commons.util.OsgiPropertyUtil;
+import com.adobe.acs.commons.util.ParameterUtil;
 import com.day.cq.wcm.api.Page;
 import com.day.cq.wcm.api.PageManager;
 import com.day.cq.wcm.api.WCMMode;
@@ -69,7 +69,7 @@ public class WCMViewsServlet extends SlingSafeMethodsServlet {
             cardinality = Integer.MAX_VALUE,
             value = {})
     public static final String PROP_DEFAULT_VIEWS = "wcm-views";
-    
+
     @Override
     protected final void doGet(SlingHttpServletRequest request, SlingHttpServletResponse response) throws
             ServletException, IOException {
@@ -124,7 +124,7 @@ public class WCMViewsServlet extends SlingSafeMethodsServlet {
         response.getWriter().write(jsonArray.toString());
     }
 
-    private class WCMViewsResourceVisitor extends AbstractResourceVisitor {
+    private static class WCMViewsResourceVisitor extends AbstractResourceVisitor {
         final Set<String> views = new TreeSet<String>();
 
         public final List<String> getWCMViews() {
@@ -154,6 +154,6 @@ public class WCMViewsServlet extends SlingSafeMethodsServlet {
     @Activate
     protected final void activate(final Map<String, String> config) {
         final String[] tmp = PropertiesUtil.toStringArray(config.get(PROP_DEFAULT_VIEWS), DEFAULT_VIEWS);
-        this.defaultViews = OsgiPropertyUtil.toMap(tmp, "=", ";");
+        this.defaultViews = ParameterUtil.toMap(tmp, "=", ";");
     }
 }

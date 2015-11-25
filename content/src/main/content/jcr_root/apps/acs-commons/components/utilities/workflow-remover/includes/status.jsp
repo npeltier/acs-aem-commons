@@ -18,36 +18,32 @@
   ~ #L%
   --%>
 
-<div ng-show="app.running || status.status === 'complete'">
+<%-- Running --%>
+<section class="coral-Well" ng-show="app.running">
+    
+    <h4 acs-coral-heading>Workflow removal status: RUNNING</h4>
 
-    <div class="section summary-section">
-        <h3>Workflow Removal Status</h3>
+    <ul acs-coral-list>
+        <li>WF instances checked: {{ status.checkedCount || 0 }}</li>
+        <li>WF instances removed : {{ status.removedCount || 0 }}</li>
+        <li>Initiated by: {{ status.initiatedBy }}</li>
+        <li>Started at: {{ status.startedAt }}</li>
+        <li>Duration: {{ status.duration }} seconds</li>
+    </ul>
 
-        <section class="well">
+</section>
 
-            <h4 ng-show="!app.running &&  status.status === 'complete'">Previous Workflow Removal Status</h4>
+<%-- Finished: Completed or Errored --%>
+<section class="coral-Well" ng-show="!app.running && (status.erredAt || status.completedAt)">
+    <h4 acs-coral-heading>Workflow removal status: {{ status.erredAt ? 'ERROR' : 'COMPLETED' }}</h4>
 
-            <ul>
-                <li>Workflow instance removal status
-                    : <span style="text-transform: capitalize;">{{ status.status || 'Not Started'}}</span></li>
-
-                <li ng-show="app.running">WF instances checked: {{ status.checkedCount || 0 }}</li>
-                <li ng-hide="app.running">Total WF instances checked: {{ status.checkedCount || 0 }}</li>
-
-                <li ng-show="app.running">WF instances removed : {{ status.count || 0 }}</li>
-                <li ng-hide="app.running">Total WF instances removed: {{ status.count || 0 }}</li>
-
-                <li ng-show="status.initiatedBy">Initiated by: {{ status.initiatedBy }}</li>
-
-                <li ng-show="status.startedAt">Started at: {{ status.startedAt }}</li>
-
-                <li ng-show="status.completedAt">Started at: {{ status.completedAt }}</li>
-
-                <li>Time taken: {{ status.timeTaken }} seconds</li>
-
-            </ul>
-
-        </section>
-    </div>
-
-</div>
+    <ul acs-coral-list>
+        <li>WF instances checked: {{ status.checkedCount || 0 }}</li>
+        <li>WF instances removed : {{ status.removedCount || 0 }}</li>
+        <li>Initiated by: {{ status.initiatedBy }}</li>
+        <li>Started at: {{ status.startedAt }}</li>
+        <li ng-show="status.erredAt">Erred at: {{ status.erredAt }}</li>
+        <li ng-show="status.completedAt">Completed at: {{ status.completedAt }}</li>
+        <li>Duration: {{ status.duration }} seconds</li>
+    </ul>
+</section>

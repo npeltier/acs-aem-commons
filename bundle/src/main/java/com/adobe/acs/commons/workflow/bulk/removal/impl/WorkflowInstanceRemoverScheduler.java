@@ -62,6 +62,9 @@ import java.util.regex.Pattern;
                 boolValue = false,
                 propertyPrivate = true
         ),
+        @Property(
+                name = "webconsole.configurationFactory.nameHint",
+                value = "Runs at '{scheduler.expression}' on models [{workflow.models}] with status [{workflow.statuses}]")
 })
 @Service
 public class WorkflowInstanceRemoverScheduler implements Runnable {
@@ -113,6 +116,14 @@ public class WorkflowInstanceRemoverScheduler implements Runnable {
             longValue = 0)
     public static final String PROP_WORKFLOWS_OLDER_THAN = "workflow.older-than";
 
+
+    private static final int DEFAULT_BATCH_SIZE = 1000;
+    private int batchSize = DEFAULT_BATCH_SIZE;
+    @Property(label = "Batch Size",
+            description = "Save removals to JCR in batches of this defined size.",
+            intValue = DEFAULT_BATCH_SIZE)
+    public static final String PROP_BATCH_SIZE = "batch-size";
+    
     @Override
     public final void run() {
 
@@ -127,16 +138,23 @@ public class WorkflowInstanceRemoverScheduler implements Runnable {
                     models,
                     statuses,
                     payloads,
-                    olderThan);
+                    olderThan, 
+                    batchSize);
 
-            log.info("Removed [ {} ] Workflow instances in {} ms", count, System.currentTimeMillis() - start);
+            if (log.isInfoEnabled()) {
+                log.info("Removed [ {} ] Workflow instances in {} ms", count, System.currentTimeMillis() - start);
+            }
 
         } catch (LoginException e) {
             log.error("Login Exception when getting admin resource resolver", e);
         } catch (PersistenceException e) {
             log.error("Persistence Exception when saving Workflow Instances removal", e);
         } catch (WorkflowRemovalException e) {
-            log.warn("Workflow Removal Exception occurred preventing the removal process from starting.", e);
+            log.error("Workflow Removal exception during Workflow Removal", e);
+        } catch (InterruptedException e) {
+            log.error("Interrupted Exception during Workflow Removal", e);
+        } catch (WorkflowRemovalForceQuitException e) {
+            log.info("Workflow Removal force quit", e);
         } finally {
             if (adminResourceResolver != null) {
                 adminResourceResolver.close();
@@ -168,6 +186,11 @@ public class WorkflowInstanceRemoverScheduler implements Runnable {
             olderThan = Calendar.getInstance();
             olderThan.setTimeInMillis(olderThanTs);
         }
+        
+        batchSize = PropertiesUtil.toInteger(config.get(PROP_BATCH_SIZE), DEFAULT_BATCH_SIZE);
+        if (batchSize < 1) {
+            batchSize = DEFAULT_BATCH_SIZE;
+        }
     }
 
     @Deactivate
@@ -176,5 +199,6 @@ public class WorkflowInstanceRemoverScheduler implements Runnable {
         statuses = new ArrayList<String>();
         models = new ArrayList<String>();
         payloads = new ArrayList<Pattern>();
+        batchSize = DEFAULT_BATCH_SIZE;
     }
 }
