@@ -116,6 +116,15 @@
                     name="./includePrincipals"
                     type="checkbox"
                     xtype="selection"/>
+                <include-principals-implicit
+                        jcr:primaryType="cq:Widget"
+                        defaultValue="false"
+                        fieldDescription="Include the principals implicitly meaning groups and users referenced directly or indirectly by the found ACLs. [ Default: false ]"
+                        fieldLabel="Include principals implicitly"
+                        inputValue="true"
+                        name="./includePrincipalsImplicitly"
+                        type="checkbox"
+                        xtype="selection"/>
                 <include-acl-packager-configuration
                     jcr:primaryType="cq:Widget"
                     defaultValue="false"

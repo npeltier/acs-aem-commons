@@ -32,6 +32,7 @@ import com.day.jcr.vault.packaging.JcrPackageDefinition;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.sling.SlingServlet;
 import org.apache.jackrabbit.api.security.user.Authorizable;
+import org.apache.jackrabbit.api.security.user.Group;
 import org.apache.jackrabbit.api.security.user.UserManager;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
@@ -92,6 +93,8 @@ public class ACLPackagerServletImpl extends SlingAllMethodsServlet {
 
     private static final String INCLUDE_PRINCIPALS = "includePrincipals";
 
+    private static final String INCLUDE_PRINCIPALS_IMPLICITLY = "includePrincipalsImplicitly";
+
     private static final String INCLUDE_CONFIGURATION = "includeConfiguration";
 
     private static final String DEFAULT_PACKAGE_NAME = "acls";
@@ -140,14 +143,19 @@ public class ACLPackagerServletImpl extends SlingAllMethodsServlet {
 
         final String[] principalNames = properties.get(PRINCIPAL_NAMES, new String[]{});
 
+        final List<String> principals = Arrays.asList(principalNames);
+
+        final boolean implicitPrincipals = properties.get(INCLUDE_PRINCIPALS_IMPLICITLY, false);
+
         final List<PathFilterSet> packageResources = this.findResources(resourceResolver,
-                Arrays.asList(principalNames),
+                implicitPrincipals,
+                principals,
                 toPatterns(Arrays.asList(properties.get(INCLUDE_PATTERNS, new String[]{}))));
 
         try {
             // Add Principals
-            if (properties.get(INCLUDE_PRINCIPALS, DEFAULT_INCLUDE_PRINCIPALS)) {
-                packageResources.addAll(this.getPrincipalResources(resourceResolver, principalNames));
+            if (implicitPrincipals || properties.get(INCLUDE_PRINCIPALS, DEFAULT_INCLUDE_PRINCIPALS)) {
+                packageResources.addAll(this.getPrincipalResources(resourceResolver, principalNames, implicitPrincipals));
             }
 
             // Add the ACL Packager Configuration page
@@ -221,12 +229,17 @@ public class ACLPackagerServletImpl extends SlingAllMethodsServlet {
      * Search the JCR for all rep:ACE nodes to be further filtered by Grant/Deny ACE rep:principalNames.
      *
      * @param resourceResolver ResourceResolver of initiating user
-     * @param principalNames   Principal Names to filter rep:ACE nodes with; Only rep:ACE nodes with children
+     * @param implicitPrincipals either collect principals tied to an ACLs, either explictally specify them.
+     * @param principalNames   either a filter or a collector, depending on the previous implicitPrincipals flag
+     *                         - explicit: Principal Names to filter rep:ACE nodes with; Only rep:ACE nodes with children
      *                         with rep:principalNames in this list will be returned
+     *                         - implicit: collecting the principal names, in order to add resources afterward
+     *
      * @return Set (ordered by path) of rep:ACE coverage who hold permissions for at least one Principal
      * enumerated in principleNames
      */
     private List<PathFilterSet> findResources(final ResourceResolver resourceResolver,
+                                              final boolean implicitPrincipals,
                                               final List<String> principalNames,
                                               final List<Pattern> includePatterns) {
         boolean isOak = true;
@@ -273,8 +286,10 @@ public class ACLPackagerServletImpl extends SlingAllMethodsServlet {
                     final Resource ace = aces.next();
                     final ValueMap props = ace.adaptTo(ValueMap.class);
                     final String repPrincipalName = props.get("rep:principalName", String.class);
-
-                    if (principalNames == null
+                    if (implicitPrincipals) {
+                        resources.add(repPolicy);
+                        principalNames.add(repPrincipalName);
+                    } else if (principalNames == null
                             || principalNames.isEmpty()
                             || principalNames.contains(repPrincipalName)) {
 
@@ -301,28 +316,47 @@ public class ACLPackagerServletImpl extends SlingAllMethodsServlet {
      * @param resourceResolver the ResourceResolver obj to get the principal resources;
      *                         Must have read access to the principal resources.
      * @param principalNames   the principals to get
+     * @param isDeep           wether to add group's members & sub members etc...
      * @return a list of PathFilterSets covering the selectes principal names (if they exist)
      * @throws RepositoryException
      */
-    private List<PathFilterSet> getPrincipalResources(final ResourceResolver resourceResolver,
-                                                      final String[] principalNames) throws RepositoryException {
+    private List<PathFilterSet> getPrincipalResources(  final ResourceResolver resourceResolver,
+                                                        final String[] principalNames,
+                                                        final boolean isDeep) throws RepositoryException {
         final UserManager userManager = resourceResolver.adaptTo(UserManager.class);
         final List<PathFilterSet> pathFilterSets = new ArrayList<PathFilterSet>();
-
         for (final String principalName : principalNames) {
             final Authorizable authorizable = userManager.getAuthorizable(principalName);
-            if (authorizable != null) {
-                final Resource resource = resourceResolver.getResource(authorizable.getPath());
-                if (resource != null) {
-                    final PathFilterSet principal = new PathFilterSet(resource.getPath());
-                    // Exclude tokens as they are not vlt installable in AEM6/Oak
-                    principal.addExclude(new DefaultPathFilter(resource.getPath() + "/\\.tokens"));
-                    pathFilterSets.add(principal);
+            addPrincipalToFilterSet(resourceResolver, authorizable, pathFilterSets, isDeep);
+        }
+        return pathFilterSets;
+    }
+
+    /**
+     * add a principal to the path filter set
+     * @param resolver, resource resolver with which auth resources are collected
+     * @param authorizable, authorizable to add
+     * @param pathFilterSets, paths added to the package
+     * @param isDeep if true adds given principal's members and so-on
+     */
+    private void addPrincipalToFilterSet(final ResourceResolver resolver,
+                                         final Authorizable authorizable,
+                                         final List<PathFilterSet> pathFilterSets,
+                                         final boolean isDeep) throws RepositoryException {
+        if (authorizable != null) {
+            final Resource resource = resolver.getResource(authorizable.getPath());
+            if (resource != null) {
+                final PathFilterSet principal = new PathFilterSet(resource.getPath());
+                // Exclude tokens as they are not vlt installable in AEM6/Oak
+                principal.addExclude(new DefaultPathFilter(resource.getPath() + "/\\.tokens"));
+                pathFilterSets.add(principal);
+                if (isDeep && authorizable.isGroup()){
+                    for (Iterator<Authorizable> members = ((Group)authorizable).getMembers(); members.hasNext();){
+                        addPrincipalToFilterSet(resolver, authorizable, pathFilterSets, true);
+                    }
                 }
             }
         }
-
-        return pathFilterSets;
     }
 
     /**
